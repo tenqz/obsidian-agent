@@ -1,0 +1,64 @@
+[tool.poetry]
+name = "obsidian-agent"
+version = "0.1.0"
+description = "MCP server for Obsidian vault integration"
+authors = ["Oleg Patsay <smmartbiz@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "app" }]
+keywords = ["obsidian", "mcp", "cursor", "ai", "notes", "knowledge-management"]
+homepage = "https://github.com/tenqz/obsidian-agent"
+repository = "https://github.com/tenqz/obsidian-agent"
+documentation = "https://github.com/tenqz/obsidian-agent#readme"
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Text Processing :: Markup :: Markdown",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+
+[tool.poetry.urls]
+Issues = "https://github.com/tenqz/obsidian-agent/issues"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+mcp = "^1.0.0"
+uvicorn = "^0.27.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.23.0"
+ruff = "^0.1.0"
+mypy = "^1.8.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+addopts = "--cov=app --cov-report=term-missing --cov-report=html"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
