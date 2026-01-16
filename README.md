@@ -232,4 +232,4 @@ Check that Docker has access to the vault directory. On Windows/Mac, ensure the 
 
 ---
 
-<p align="center">Made with ❤️ for the Obsidian community</p>
+<p align="center">Made with ❤️ for the Obsidian community by Oleg Patsay</p>
