@@ -28,6 +28,29 @@ class VaultService:
         self._ensure_dir(target)
         return self._list_dir(base=base, target=target)
 
+    def read(self, path: str) -> str:
+        """Read a markdown file inside the vault and return its content.
+
+        Rules:
+        - `path` must be a relative path inside the vault.
+        - Hidden entries (any path component starting with ".") are excluded.
+        - Only `.md` files are allowed.
+        """
+        if not path or not path.strip():
+            raise ValueError("path must be non-empty")
+
+        relative = Path(path)
+        if any(self._is_hidden(part) for part in relative.parts):
+            raise ValueError("hidden paths are not allowed")
+
+        base, target = self._resolve_inside_vault(path)
+        self._ensure_file(target)
+
+        if not self._is_markdown(target):
+            raise ValueError("only .md files are allowed")
+
+        return target.read_text(encoding="utf-8")
+
     def _resolve_inside_vault(self, path: str) -> tuple[Path, Path]:
         """Resolve a relative path safely within the vault root.
 
