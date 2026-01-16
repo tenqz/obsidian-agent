@@ -10,12 +10,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+import uvicorn
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-import uvicorn
 
 from app.vault.service import VaultService
-
 
 # NOTE: For Cloudflare Quick Tunnel the public hostname changes often, which
 # clashes with DNS rebinding protection allowlists. We'll disable it for now.
@@ -78,10 +77,10 @@ def vault_write(path: str, content: str) -> dict[str, bool]:
 
 if __name__ == "__main__":
     import sys
-    
+
     # Check environment variable to determine transport mode
     transport_mode = os.getenv("MCP_TRANSPORT", "sse")
-    
+
     if transport_mode == "stdio":
         # stdio mode for direct MCP client connection
         mcp.run(transport="stdio")
@@ -89,7 +88,7 @@ if __name__ == "__main__":
         # SSE mode for network access (default for Docker)
         host = os.getenv("MCP_HOST", "0.0.0.0")
         port = int(os.getenv("MCP_PORT", "8001"))
-        
+
         # Create SSE app and run with uvicorn
         app = mcp.sse_app()
         print(f"Starting MCP SSE server on {host}:{port}", file=sys.stderr, flush=True)
