@@ -1,9 +1,7 @@
 services:
-  obsidian-agent:
+  mcp:
     build:
       context: .
-    ports:
-      - "${AGENT_PORT:-18080}:8000"
     env_file:
       - .env
     environment:
@@ -11,3 +9,7 @@ services:
       VAULT_PATH: "/vault"
     volumes:
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
+    ports:
+      - "${MCP_PORT:-18081}:8001"
+    command: ["python", "-m", "app.mcp.server"]
+    restart: unless-stopped
