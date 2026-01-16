@@ -32,7 +32,7 @@ class VaultListItem(BaseModel):
 
 app = FastAPI(
     title="Obsidian Vault Agent",
-    version="0.0.0",
+    version="0.1.0",
     description="HTTP API for an Obsidian vault agent.",
 )
 
