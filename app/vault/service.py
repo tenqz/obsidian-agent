@@ -51,6 +51,39 @@ class VaultService:
 
         return target.read_text(encoding="utf-8")
 
+    def write(self, path: str, content: str) -> None:
+        """Write markdown content to a file inside the vault.
+
+        Rules:
+        - `path` must be a relative path inside the vault.
+        - Hidden entries (any path component starting with ".") are excluded.
+        - Only `.md` files are allowed.
+        - Parent directories are created automatically.
+        - Existing files are overwritten.
+        """
+        if not path or not path.strip():
+            raise ValueError("path must be non-empty")
+
+        relative = Path(path)
+        if any(self._is_hidden(part) for part in relative.parts):
+            raise ValueError("hidden paths are not allowed")
+
+        base, target = self._resolve_inside_vault(path)
+
+        if not self._is_markdown(target):
+            raise ValueError("only .md files are allowed")
+
+        if target.exists() and target.is_dir():
+            raise IsADirectoryError(str(target))
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        # Ensure parent directory stays inside the vault root.
+        if target.parent != base and base not in target.parent.parents:
+            raise ValueError("path escapes vault root")
+
+        target.write_text(content, encoding="utf-8")
+
     def _resolve_inside_vault(self, path: str) -> tuple[Path, Path]:
         """Resolve a relative path safely within the vault root.
 
