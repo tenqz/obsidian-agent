@@ -11,6 +11,9 @@ from typing import Any
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.exceptions import HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from app.vault.service import VaultService
 
@@ -40,6 +43,30 @@ def _safe_error_message(exc: Exception) -> str:
     if isinstance(exc, ValueError):
         return str(exc)
     return "unexpected error"
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Middleware for Bearer token authentication."""
+
+    def __init__(self, app, token: str):
+        super().__init__(app)
+        self.required_token = token
+
+    async def dispatch(self, request: Request, call_next):
+        auth_header = request.headers.get("Authorization")
+
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Authorization header missing")
+
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization scheme")
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+
+        if token != self.required_token:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        return await call_next(request)
 
 
 @mcp.tool()
@@ -90,9 +117,22 @@ if __name__ == "__main__":
         # SSE mode for network access (default for Docker)
         host = os.getenv("MCP_HOST", "0.0.0.0")
         port = int(os.getenv("MCP_PORT", "8001"))
+        auth_token = os.getenv("MCP_AUTH_TOKEN")
 
-        # Create SSE app and run with uvicorn
+        # Create SSE app
         app = mcp.sse_app()
+
+        # Add authentication middleware if token is configured
+        if auth_token:
+            app.add_middleware(AuthMiddleware, token=auth_token)
+            print(f"Authentication enabled for SSE server", file=sys.stderr, flush=True)
+        else:
+            print(
+                "WARNING: No MCP_AUTH_TOKEN set - SSE server running without authentication",
+                file=sys.stderr,
+                flush=True,
+            )
+
         print(f"Starting MCP SSE server on {host}:{port}", file=sys.stderr, flush=True)
         uvicorn.run(app, host=host, port=port, log_level="info")
 
