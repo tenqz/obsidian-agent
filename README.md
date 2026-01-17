@@ -173,6 +173,7 @@ obsidian-agent/
 | `VAULT_PATH` | Path to Obsidian vault | `/vault` |
 | `MCP_TRANSPORT` | Transport mode (stdio/sse) | `stdio` |
 | `MCP_PORT` | Port for SSE mode | `8001` |
+| `MCP_AUTH_TOKEN` | Bearer token for SSE authentication (optional) | - |
 
 ### Docker Compose (Alternative)
 
@@ -193,6 +194,7 @@ Example `.env`:
 OBSIDIAN_VAULT_PATH=/path/to/your/vault
 MCP_TRANSPORT=sse
 MCP_PORT=8001
+MCP_AUTH_TOKEN=your_secret_token_here
 ```
 
 **2. Start server:**
@@ -208,6 +210,24 @@ docker compose logs -f
 ```
 
 Server will be available at `http://localhost:8001`
+
+### SSE Authentication
+
+When running in SSE mode, you can secure the server with Bearer token authentication:
+
+**1. Set authentication token in `.env`:**
+
+```bash
+MCP_AUTH_TOKEN=your_secret_token_here
+```
+
+**2. Access the server with authentication:**
+
+```bash
+curl -H "Authorization: Bearer your_secret_token_here" http://localhost:8001/sse
+```
+
+If `MCP_AUTH_TOKEN` is not set, the server will run without authentication (warning will be shown in logs).
 
 ---
 
@@ -253,6 +273,22 @@ Check that Docker has access to the vault directory. On Windows/Mac, ensure the 
 2. Restart your client completely
 3. Check Docker is running: `docker ps`
 4. Check server logs: `docker logs <container-name>`
+</details>
+
+<details>
+<summary><b>401 Unauthorized error in SSE mode</b></summary>
+
+Make sure you're sending the correct Bearer token in the Authorization header:
+
+```bash
+# Check your token is set
+docker compose exec mcp printenv MCP_AUTH_TOKEN
+
+# Test with curl
+curl -H "Authorization: Bearer your_token" http://localhost:8001/sse
+```
+
+If the token is not set, the server will run without authentication (check logs for warning).
 </details>
 
 ---
