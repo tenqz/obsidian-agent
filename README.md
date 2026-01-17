@@ -107,41 +107,54 @@ Try these commands in your LLM client:
 
 ### Setup Development Environment
 
+All development commands run inside Docker containers, so you only need Docker installed:
+
 ```bash
-# Install Poetry
-curl -sSL https://install.python-poetry.org | python3 -
-
-# Install dependencies
-poetry install
-
-# Activate virtual environment
-poetry shell
+# Check available commands
+make help
 ```
 
 ### Run Tests
 
 ```bash
-# Run all tests
-poetry run pytest
+# Run all tests with coverage
+make test
 
-# Run with coverage
-poetry run pytest --cov
-
-# Run specific test file
-poetry run pytest tests/test_vault_service.py
+# Run tests without coverage (faster)
+make test-quick
 ```
 
 ### Run Linters
 
 ```bash
-# Check code style
-poetry run ruff check .
+# Run all linters (ruff + mypy)
+make lint
 
-# Auto-fix issues
-poetry run ruff check --fix .
+# Auto-fix and format code
+make format
+```
 
-# Type checking
-poetry run mypy app/
+### Run All Checks
+
+```bash
+# Run linters + tests in one command
+make check
+```
+
+### Docker Commands
+
+```bash
+# Build production image
+make docker-build
+
+# Start services
+make docker-up
+
+# Stop services
+make docker-down
+
+# View logs
+make docker-logs
 ```
 
 ### Project Structure
