@@ -1,7 +1,7 @@
 <h1 align="center">Obsidian MCP Server</h1>
 
 <p align="center">
-Connect your Obsidian vault to Cursor AI - read, write, and manage notes with AI assistance.
+Connect your Obsidian vault to any LLM via MCP - read, write, and manage notes with AI assistance.
 </p>
 
 <p align="center">
@@ -15,9 +15,10 @@ Connect your Obsidian vault to Cursor AI - read, write, and manage notes with AI
 
 ## ✨ Features
 
-- 📝 **Read & Write** - Access and modify your Obsidian notes from Cursor
+- 📝 **Read & Write** - Access and modify your Obsidian notes from any LLM
 - 🗂️ **Navigate** - Browse folders and files in your vault
-- 🤖 **AI-Powered** - Let Cursor AI help you organize and create notes
+- 🤖 **AI-Powered** - Let AI help you organize and create notes
+- 🔌 **MCP Protocol** - Compatible with any MCP-supported LLM client
 - 🐳 **Docker Ready** - Simple setup with Docker
 - 🔒 **Safe** - Secure file system operations with path validation
 
@@ -28,7 +29,7 @@ Connect your Obsidian vault to Cursor AI - read, write, and manage notes with AI
 ### Prerequisites
 
 - Docker installed on your system
-- [Cursor](https://cursor.sh/) editor installed
+- Any MCP-compatible LLM client (Cursor, Claude Desktop, etc.)
 
 ### 1️⃣ Build the Docker Image
 
@@ -38,11 +39,15 @@ cd obsidian-agent
 docker build -t obsidian-agent-mcp .
 ```
 
-### 2️⃣ Configure Cursor
+### 2️⃣ Configure Your MCP Client
 
-Open Cursor settings: **Settings → Features → Model Context Protocol**
+Add MCP server configuration to your client's settings file.
 
-Add this configuration (replace `/path/to/your/vault` with your actual vault path):
+**For Cursor:** `Settings → Features → Model Context Protocol`
+
+**For Claude Desktop:** `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+
+Example configuration (replace `/path/to/your/vault` with your actual vault path):
 
 ```json
 {
@@ -70,15 +75,15 @@ Add this configuration (replace `/path/to/your/vault` with your actual vault pat
 | **macOS** | `/Users/YourName/Documents/ObsidianVault` |
 | **Linux** | `/home/yourname/Documents/ObsidianVault` |
 
-### 3️⃣ Restart Cursor
+### 3️⃣ Restart Your Client
 
-Restart Cursor to activate the MCP server. You're ready! 🎉
+Restart your MCP client to activate the server. You're ready! 🎉
 
 ---
 
 ## 💡 Usage Examples
 
-Try these commands in Cursor:
+Try these commands in your LLM client:
 
 - `"Show all notes in my vault"`
 - `"Read my daily note for today"`
@@ -242,11 +247,12 @@ Check that Docker has access to the vault directory. On Windows/Mac, ensure the 
 </details>
 
 <details>
-<summary><b>MCP server not appearing in Cursor</b></summary>
+<summary><b>MCP server not appearing in your client</b></summary>
 
-1. Verify the configuration in Cursor settings
-2. Restart Cursor completely
+1. Verify the configuration in your MCP client settings
+2. Restart your client completely
 3. Check Docker is running: `docker ps`
+4. Check server logs: `docker logs <container-name>`
 </details>
 
 ---
