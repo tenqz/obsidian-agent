@@ -20,7 +20,8 @@ Connect your Obsidian vault to any LLM via MCP - read, write, and manage notes w
 - 🤖 **AI-Powered** - Let AI help you organize and create notes
 - 🔌 **MCP Protocol** - Compatible with any MCP-supported LLM client
 - 🐳 **Docker Ready** - Simple setup with Docker
-- 🔒 **Safe** - Secure file system operations with path validation
+- 🔒 **OAuth 2.0** - Secure authentication for network access
+- ⚡ **Two Modes** - stdio for direct connection, SSE for network access
 
 ---
 
@@ -29,7 +30,21 @@ Connect your Obsidian vault to any LLM via MCP - read, write, and manage notes w
 ### Prerequisites
 
 - Docker installed on your system
-- Any MCP-compatible LLM client (Cursor, Claude Desktop, etc.)
+- Any MCP-compatible LLM client (Cursor, Claude Desktop, ChatGPT, etc.)
+
+### Two Connection Modes
+
+**stdio mode** - Direct connection for desktop clients (Cursor, Claude Desktop)
+- Best for: Local development, direct LLM client integration
+- Security: No network exposure, runs in isolated container
+
+**SSE mode** - Network access via Server-Sent Events
+- Best for: ChatGPT MCP, remote access, web applications
+- Security: OAuth 2.0 authentication required
+
+---
+
+### 📟 stdio Mode Setup (Cursor, Claude Desktop)
 
 ### 1️⃣ Build the Docker Image
 
@@ -78,6 +93,77 @@ Example configuration (replace `/path/to/your/vault` with your actual vault path
 ### 3️⃣ Restart Your Client
 
 Restart your MCP client to activate the server. You're ready! 🎉
+
+---
+
+### 🌐 SSE Mode Setup (ChatGPT, Remote Access)
+
+Perfect for ChatGPT MCP integration or when you need network access to your vault.
+
+### 1️⃣ Configure Environment
+
+```bash
+# Copy example config
+cp .env.example .env
+
+# Edit .env file
+nano .env
+```
+
+Minimal `.env` configuration:
+```bash
+OBSIDIAN_VAULT_PATH=/path/to/your/vault
+MCP_TRANSPORT=sse
+MCP_PORT=8001
+
+# OAuth 2.0 authentication (required for network security)
+MCP_OAUTH_ENABLED=true
+MCP_OAUTH_CLIENT_ID=chatgpt-mcp-client
+MCP_OAUTH_CLIENT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+MCP_OAUTH_ISSUER=http://localhost:8001
+```
+
+### 2️⃣ Start Server
+
+```bash
+docker compose up -d
+
+# Check logs
+docker compose logs -f
+```
+
+Server is now running at `http://localhost:8001`
+
+### 3️⃣ Configure ChatGPT (or other MCP client)
+
+In your ChatGPT MCP settings:
+- **Server URL:** `http://localhost:8001`
+- **OAuth Token Endpoint:** `http://localhost:8001/oauth/token`
+- **OAuth Metadata:** `http://localhost:8001/.well-known/oauth-authorization-server`
+- **Client ID:** `chatgpt-mcp-client` (from your .env)
+- **Client Secret:** Your generated secret (from .env)
+
+ChatGPT will automatically:
+1. Request access token using client credentials
+2. Use token to connect to SSE endpoint
+3. Refresh token when it expires (after 1 hour)
+
+### 4️⃣ Test Connection
+
+```bash
+# Get access token
+TOKEN_RESPONSE=$(curl -s -X POST http://localhost:8001/oauth/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=chatgpt-mcp-client" \
+  -d "client_secret=your_secret_here")
+
+echo $TOKEN_RESPONSE
+# {"access_token":"...","token_type":"Bearer","expires_in":3600}
+
+# Test SSE connection
+ACCESS_TOKEN=$(echo $TOKEN_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:8001/sse
+```
 
 ---
 
@@ -179,6 +265,13 @@ obsidian-agent/
 
 ## 🔧 Configuration
 
+### Transport Modes
+
+| Mode | Use Case | Authentication | Connection |
+|------|----------|---------------|------------|
+| **stdio** | Cursor, Claude Desktop | None (isolated) | Direct stdin/stdout |
+| **SSE** | ChatGPT, Remote access | OAuth 2.0 | HTTP/SSE stream |
+
 ### Environment Variables
 
 | Variable | Description | Default |
@@ -186,61 +279,34 @@ obsidian-agent/
 | `VAULT_PATH` | Path to Obsidian vault | `/vault` |
 | `MCP_TRANSPORT` | Transport mode (stdio/sse) | `stdio` |
 | `MCP_PORT` | Port for SSE mode | `8001` |
-| `MCP_AUTH_TOKEN` | Bearer token for SSE authentication (optional) | - |
+| `MCP_OAUTH_ENABLED` | Enable OAuth 2.0 authentication | `false` |
+| `MCP_OAUTH_CLIENT_ID` | OAuth client ID (required if OAuth enabled) | - |
+| `MCP_OAUTH_CLIENT_SECRET` | OAuth client secret (required if OAuth enabled) | - |
+| `MCP_OAUTH_ISSUER` | OAuth issuer URL (your server address) | `http://localhost:8001` |
 
-### Docker Compose (Alternative)
+### OAuth 2.0 Details
 
-For SSE mode (network access), use docker-compose:
+**Authentication Flow:**
+1. Client sends `client_id` and `client_secret` to `/oauth/token`
+2. Server returns `access_token` (valid for 1 hour)
+3. Client uses token in `Authorization: Bearer <token>` header
+4. Server validates token before allowing SSE connection
 
-**1. Setup environment:**
+**OAuth Endpoints:**
+- Token endpoint: `POST /oauth/token`
+- Metadata: `GET /.well-known/oauth-authorization-server`
+- Protected: `GET /sse` (requires valid access token)
 
+**Generate secure client secret:**
 ```bash
-# Copy example config
-cp .env.example .env
-
-# Edit .env and set your vault path
-nano .env
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Example `.env`:
-```bash
-OBSIDIAN_VAULT_PATH=/path/to/your/vault
-MCP_TRANSPORT=sse
-MCP_PORT=8001
-MCP_AUTH_TOKEN=your_secret_token_here
-```
-
-**2. Start server:**
-
-```bash
-docker compose up -d
-```
-
-**3. Check status:**
-
-```bash
-docker compose logs -f
-```
-
-Server will be available at `http://localhost:8001`
-
-### SSE Authentication
-
-When running in SSE mode, you can secure the server with Bearer token authentication:
-
-**1. Set authentication token in `.env`:**
-
-```bash
-MCP_AUTH_TOKEN=your_secret_token_here
-```
-
-**2. Access the server with authentication:**
-
-```bash
-curl -H "Authorization: Bearer your_secret_token_here" http://localhost:8001/sse
-```
-
-If `MCP_AUTH_TOKEN` is not set, the server will run without authentication (warning will be shown in logs).
+**Security notes:**
+- Tokens expire after 3600 seconds (1 hour)
+- Expired tokens are automatically cleaned from memory
+- For production, use HTTPS and keep secrets secure
+- Without OAuth enabled, SSE server runs without authentication (not recommended)
 
 ---
 
@@ -291,17 +357,72 @@ Check that Docker has access to the vault directory. On Windows/Mac, ensure the 
 <details>
 <summary><b>401 Unauthorized error in SSE mode</b></summary>
 
-Make sure you're sending the correct Bearer token in the Authorization header:
+Make sure OAuth is enabled and you're using a valid access token:
 
 ```bash
-# Check your token is set
-docker compose exec mcp printenv MCP_AUTH_TOKEN
+# Check OAuth configuration
+docker compose exec mcp printenv | grep MCP_OAUTH
 
-# Test with curl
-curl -H "Authorization: Bearer your_token" http://localhost:8001/sse
+# Get access token
+curl -X POST http://localhost:8001/oauth/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=your_client_id" \
+  -d "client_secret=your_secret"
+
+# Test with token
+curl -H "Authorization: Bearer <access_token>" http://localhost:8001/sse
+```
+</details>
+
+<details>
+<summary><b>SSE connection timeout or drops</b></summary>
+
+This is normal for Server-Sent Events connections:
+- SSE maintains long-lived HTTP connections
+- Connection may timeout after inactivity (configure in your proxy/firewall)
+- Client will automatically reconnect when needed
+- Check that no firewall is blocking the connection
+</details>
+
+<details>
+<summary><b>OAuth token expired</b></summary>
+
+Access tokens expire after 1 hour (3600 seconds). Solutions:
+
+1. **For manual testing:** Get a new token:
+```bash
+curl -X POST http://localhost:8001/oauth/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=your_client_id" \
+  -d "client_secret=your_secret"
 ```
 
-If the token is not set, the server will run without authentication (check logs for warning).
+2. **For ChatGPT/automated clients:** They automatically refresh tokens
+3. **Check token expiration:** Tokens include `expires_in` field in response
+</details>
+
+<details>
+<summary><b>Server not starting or crashes</b></summary>
+
+Check the logs for specific errors:
+
+```bash
+# Docker compose logs
+docker compose logs mcp
+
+# Check if port is already in use
+lsof -i :8001  # Linux/Mac
+netstat -ano | findstr :8001  # Windows
+
+# Rebuild image if code changed
+docker compose down
+docker compose up -d --build
+```
+
+Common issues:
+- Port 8001 already in use (change `MCP_PORT` in .env)
+- Invalid vault path (check `OBSIDIAN_VAULT_PATH`)
+- Missing OAuth credentials when `MCP_OAUTH_ENABLED=true`
 </details>
 
 ---
