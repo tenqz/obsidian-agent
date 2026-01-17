@@ -171,19 +171,38 @@ obsidian-agent/
 
 ### Docker Compose (Alternative)
 
-For SSE mode (network access):
+For SSE mode (network access), use docker-compose:
 
-```yaml
-services:
-  mcp:
-    build: .
-    volumes:
-      - /path/to/vault:/vault
-    ports:
-      - "8001:8001"
-    environment:
-      - MCP_TRANSPORT=sse
+**1. Setup environment:**
+
+```bash
+# Copy example config
+cp .env.example .env
+
+# Edit .env and set your vault path
+nano .env
 ```
+
+Example `.env`:
+```bash
+OBSIDIAN_VAULT_PATH=/path/to/your/vault
+MCP_TRANSPORT=sse
+MCP_PORT=8001
+```
+
+**2. Start server:**
+
+```bash
+docker compose up -d
+```
+
+**3. Check status:**
+
+```bash
+docker compose logs -f
+```
+
+Server will be available at `http://localhost:8001`
 
 ---
 
