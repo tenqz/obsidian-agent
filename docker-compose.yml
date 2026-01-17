@@ -10,6 +10,7 @@ services:
       MCP_TRANSPORT: "${MCP_TRANSPORT:-sse}"
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8001"
+      MCP_AUTH_TOKEN: "${MCP_AUTH_TOKEN:-}"
     volumes:
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
     ports:
