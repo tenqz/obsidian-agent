@@ -5,6 +5,7 @@ via the existing `VaultService`, without going through the HTTP API.
 """
 
 import os
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.exceptions import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from app.vault.service import VaultService
 
@@ -48,11 +51,13 @@ def _safe_error_message(exc: Exception) -> str:
 class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware for Bearer token authentication."""
 
-    def __init__(self, app, token: str):
+    def __init__(self, app: ASGIApp, token: str) -> None:
         super().__init__(app)
         self.required_token = token
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         auth_header = request.headers.get("Authorization")
 
         if not auth_header:
@@ -66,7 +71,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if token != self.required_token:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        return await call_next(request)
+        response: Response = await call_next(request)
+        return response
 
 
 @mcp.tool()
@@ -125,7 +131,7 @@ if __name__ == "__main__":
         # Add authentication middleware if token is configured
         if auth_token:
             app.add_middleware(AuthMiddleware, token=auth_token)
-            print(f"Authentication enabled for SSE server", file=sys.stderr, flush=True)
+            print("Authentication enabled for SSE server", file=sys.stderr, flush=True)
         else:
             print(
                 "WARNING: No MCP_AUTH_TOKEN set - SSE server running without authentication",
