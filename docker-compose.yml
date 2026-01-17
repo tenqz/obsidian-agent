@@ -7,9 +7,18 @@ services:
     environment:
       APP_ENV: "local"
       VAULT_PATH: "/vault"
+      MCP_TRANSPORT: "${MCP_TRANSPORT:-sse}"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8001"
     volumes:
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
     ports:
-      - "${MCP_PORT:-18081}:8001"
+      - "${MCP_PORT:-8001}:8001"
     command: ["python", "-m", "app.mcp.server"]
     restart: unless-stopped
+    networks:
+      - obsidian-network
+
+networks:
+  obsidian-network:
+    driver: bridge
