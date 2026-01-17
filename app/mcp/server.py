@@ -5,19 +5,22 @@ via the existing `VaultService`, without going through the HTTP API.
 """
 
 import os
-from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from starlette.exceptions import HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.routing import Mount
 
+from app.mcp.oauth import (
+    OAuthMiddleware,
+    TokenStore,
+    create_oauth_metadata_endpoint,
+    create_token_endpoint,
+)
 from app.vault.service import VaultService
 
 # NOTE: For Cloudflare Quick Tunnel the public hostname changes often, which
@@ -46,33 +49,6 @@ def _safe_error_message(exc: Exception) -> str:
     if isinstance(exc, ValueError):
         return str(exc)
     return "unexpected error"
-
-
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Middleware for Bearer token authentication."""
-
-    def __init__(self, app: ASGIApp, token: str) -> None:
-        super().__init__(app)
-        self.required_token = token
-
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        auth_header = request.headers.get("Authorization")
-
-        if not auth_header:
-            raise HTTPException(status_code=401, detail="Authorization header missing")
-
-        if not auth_header.startswith("Bearer "):
-            raise HTTPException(status_code=401, detail="Invalid authorization scheme")
-
-        token = auth_header[7:]  # Remove "Bearer " prefix
-
-        if token != self.required_token:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        response: Response = await call_next(request)
-        return response
 
 
 @mcp.tool()
@@ -123,22 +99,58 @@ if __name__ == "__main__":
         # SSE mode for network access (default for Docker)
         host = os.getenv("MCP_HOST", "0.0.0.0")
         port = int(os.getenv("MCP_PORT", "8001"))
-        auth_token = os.getenv("MCP_AUTH_TOKEN")
+        use_oauth = os.getenv("MCP_OAUTH_ENABLED", "false").lower() == "true"
 
         # Create SSE app
-        app = mcp.sse_app()
+        mcp_app = mcp.sse_app()
 
-        # Add authentication middleware if token is configured
-        if auth_token:
-            app.add_middleware(AuthMiddleware, token=auth_token)
-            print("Authentication enabled for SSE server", file=sys.stderr, flush=True)
+        if use_oauth:
+            # OAuth 2.0 mode
+            client_id = os.getenv("MCP_OAUTH_CLIENT_ID")
+            client_secret = os.getenv("MCP_OAUTH_CLIENT_SECRET")
+            issuer = os.getenv("MCP_OAUTH_ISSUER", f"http://localhost:{port}")
+
+            if not client_id or not client_secret:
+                print(
+                    "ERROR: MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET must be set when OAuth is enabled",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                sys.exit(1)
+
+            # Create token store and OAuth endpoints
+            token_store = TokenStore()
+
+            # Create main app with OAuth endpoints
+            app = Starlette(
+                routes=[
+                    create_oauth_metadata_endpoint(issuer),
+                    create_token_endpoint(token_store, client_id, client_secret),
+                    Mount("/", app=mcp_app),
+                ],
+                middleware=[
+                    Middleware(
+                        OAuthMiddleware,
+                        token_store=token_store,
+                        protected_paths=["/sse", "/messages"],
+                    )
+                ],
+            )
+
+            print("OAuth 2.0 authentication enabled for SSE server", file=sys.stderr, flush=True)
+            print(f"OAuth issuer: {issuer}", file=sys.stderr, flush=True)
+            print(f"Token endpoint: {issuer}/oauth/token", file=sys.stderr, flush=True)
+            print(f"Metadata endpoint: {issuer}/.well-known/oauth-authorization-server", file=sys.stderr, flush=True)
         else:
+            # No authentication mode
+            app = mcp_app
             print(
-                "WARNING: No MCP_AUTH_TOKEN set - SSE server running without authentication",
+                "WARNING: OAuth is disabled - SSE server running without authentication",
                 file=sys.stderr,
                 flush=True,
             )
 
         print(f"Starting MCP SSE server on {host}:{port}", file=sys.stderr, flush=True)
         uvicorn.run(app, host=host, port=port, log_level="info")
+
 
