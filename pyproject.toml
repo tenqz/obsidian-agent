@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "obsidian-agent"
-version = "0.1.0"
-description = "MCP server for Obsidian vault integration"
+version = "1.0.0"
+description = "MCP server for Obsidian vault integration with any LLM"
 authors = ["Oleg Patsay <smmartbiz@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{ include = "app" }]
-keywords = ["obsidian", "mcp", "cursor", "ai", "notes", "knowledge-management"]
+keywords = ["obsidian", "mcp", "llm", "ai", "notes", "knowledge-management", "cursor", "claude"]
 homepage = "https://github.com/tenqz/obsidian-agent"
 repository = "https://github.com/tenqz/obsidian-agent"
 documentation = "https://github.com/tenqz/obsidian-agent#readme"
