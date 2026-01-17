@@ -6,7 +6,7 @@ via the existing `VaultService`, without going through the HTTP API.
 
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
@@ -43,9 +43,9 @@ def _safe_error_message(exc: Exception) -> str:
 
 
 @mcp.tool()
-def vault_ls(path: str) -> Dict[str, Any]:
+def vault_ls(path: str) -> dict[str, Any]:
     """List directories and markdown files inside the vault.
-    
+
     Args:
         path: Relative path inside vault (empty string for root)
     """
@@ -57,7 +57,7 @@ def vault_ls(path: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def vault_read(path: str) -> Dict[str, str]:
+def vault_read(path: str) -> dict[str, str]:
     """Read a markdown file inside the vault and return its content."""
     svc = _get_vault_service()
     try:
@@ -67,7 +67,7 @@ def vault_read(path: str) -> Dict[str, str]:
 
 
 @mcp.tool()
-def vault_write(path: str, content: str) -> Dict[str, bool]:
+def vault_write(path: str, content: str) -> dict[str, bool]:
     """Create or overwrite a markdown file inside the vault."""
     svc = _get_vault_service()
     try:
