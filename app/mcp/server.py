@@ -4,11 +4,9 @@ This server exposes a minimal set of tools for interacting with a mounted vault
 via the existing `VaultService`, without going through the HTTP API.
 """
 
-from __future__ import annotations
-
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
@@ -45,8 +43,12 @@ def _safe_error_message(exc: Exception) -> str:
 
 
 @mcp.tool()
-def vault_ls(path: str = "") -> dict[str, Any]:
-    """List directories and markdown files inside the vault."""
+def vault_ls(path: str) -> Dict[str, Any]:
+    """List directories and markdown files inside the vault.
+    
+    Args:
+        path: Relative path inside vault (empty string for root)
+    """
     svc = _get_vault_service()
     try:
         return {"entries": svc.ls(path=path)}
@@ -55,7 +57,7 @@ def vault_ls(path: str = "") -> dict[str, Any]:
 
 
 @mcp.tool()
-def vault_read(path: str) -> dict[str, str]:
+def vault_read(path: str) -> Dict[str, str]:
     """Read a markdown file inside the vault and return its content."""
     svc = _get_vault_service()
     try:
@@ -65,7 +67,7 @@ def vault_read(path: str) -> dict[str, str]:
 
 
 @mcp.tool()
-def vault_write(path: str, content: str) -> dict[str, bool]:
+def vault_write(path: str, content: str) -> Dict[str, bool]:
     """Create or overwrite a markdown file inside the vault."""
     svc = _get_vault_service()
     try:
