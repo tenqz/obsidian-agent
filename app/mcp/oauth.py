@@ -340,8 +340,15 @@ def create_authorization_endpoint(oauth_store: OAuthStore) -> Route:
         state = params.get("state", "")
         resource = params.get("resource")
 
+        # Validate client_id
+        if not client_id:
+            return JSONResponse(
+                {"error": "invalid_client", "error_description": "client_id is required"},
+                status_code=400
+            )
+
         # Validate client
-        client = oauth_store.get_client(client_id) if client_id else None
+        client = oauth_store.get_client(client_id)
         if not client:
             return JSONResponse(
                 {"error": "invalid_client"}, status_code=400
