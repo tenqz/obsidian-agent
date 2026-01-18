@@ -63,10 +63,11 @@ class AccessToken:
 class OAuthStore:
     """In-memory storage for OAuth data."""
 
-    def __init__(self) -> None:
+    def __init__(self, allow_any_client: bool = False) -> None:
         self._clients: dict[str, DynamicClient] = {}
         self._codes: dict[str, AuthorizationCode] = {}
         self._tokens: dict[str, AccessToken] = {}
+        self.allow_any_client = allow_any_client
 
     def register_client(self, redirect_uris: list[str]) -> DynamicClient:
         """Register new OAuth client (DCR)."""
@@ -82,8 +83,24 @@ class OAuthStore:
         return client
 
     def get_client(self, client_id: str) -> DynamicClient | None:
-        """Get registered client."""
-        return self._clients.get(client_id)
+        """Get registered client or accept any if allow_any_client=True."""
+        client = self._clients.get(client_id)
+        if client:
+            return client
+        
+        # If allow_any_client is True, create a virtual client for unregistered clients
+        if self.allow_any_client:
+            # Create a virtual client that accepts standard ChatGPT redirect URIs
+            return DynamicClient(
+                client_id=client_id,
+                client_secret="",  # No secret verification for virtual clients
+                redirect_uris=[
+                    "https://chatgpt.com/connector_platform_oauth_redirect",
+                    "https://platform.openai.com/apps-manage/oauth",
+                ],
+                created_at=time.time(),
+            )
+        return None
 
     def create_authorization_code(
         self,
@@ -393,7 +410,14 @@ def create_token_endpoint(oauth_store: OAuthStore) -> Route:
 
         # Validate client
         client = oauth_store.get_client(client_id)
-        if not client or client.client_secret != client_secret:
+        if not client:
+            return JSONResponse(
+                {"error": "invalid_client"}, status_code=401
+            )
+        
+        # For virtual clients (allow_any_client=True), skip secret verification
+        # For registered clients, verify secret
+        if client.client_secret and client.client_secret != client_secret:
             return JSONResponse(
                 {"error": "invalid_client"}, status_code=401
             )
