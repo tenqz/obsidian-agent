@@ -113,8 +113,8 @@ if __name__ == "__main__":
             
             print("OAuth 2.1 (Authorization Code + PKCE) for ChatGPT MCP", file=sys.stderr, flush=True)
 
-            # Create OAuth store
-            oauth_store = OAuthStore()
+            # Create OAuth store with allow_any_client for ChatGPT compatibility
+            oauth_store = OAuthStore(allow_any_client=True)
 
             # Resource URI for protected resource metadata
             resource_uri = issuer
