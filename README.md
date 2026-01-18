@@ -96,9 +96,9 @@ Restart your MCP client to activate the server. You're ready! 🎉
 
 ---
 
-### 🌐 SSE Mode Setup (ChatGPT, Remote Access)
+### 🌐 SSE Mode Setup (ChatGPT MCP)
 
-Perfect for ChatGPT MCP integration or when you need network access to your vault.
+Perfect for ChatGPT MCP integration with OAuth 2.1 authentication.
 
 ### 1️⃣ Configure Environment
 
@@ -110,18 +110,21 @@ cp .env.example .env
 nano .env
 ```
 
-Minimal `.env` configuration:
+Configuration for ChatGPT:
 ```bash
 OBSIDIAN_VAULT_PATH=/path/to/your/vault
 MCP_TRANSPORT=sse
 MCP_PORT=8001
 
-# OAuth 2.0 authentication (required for network security)
+# OAuth 2.1 for ChatGPT (required)
 MCP_OAUTH_ENABLED=true
-MCP_OAUTH_CLIENT_ID=chatgpt-mcp-client
-MCP_OAUTH_CLIENT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-MCP_OAUTH_ISSUER=http://localhost:8001
+MCP_OAUTH_ISSUER=https://your-server.com
 ```
+
+**Important:**
+- **HTTPS is required in production!** Use Let's Encrypt, Cloudflare, etc.
+- `MCP_OAUTH_ISSUER` must be your public HTTPS URL (e.g., `https://mcp.yourdomain.com`)
+- No client credentials needed - ChatGPT registers dynamically
 
 ### 2️⃣ Start Server
 
@@ -132,37 +135,38 @@ docker compose up -d
 docker compose logs -f
 ```
 
-Server is now running at `http://localhost:8001`
+You should see:
+```
+OAuth 2.1 (Authorization Code + PKCE) for ChatGPT MCP
+OAuth issuer: https://your-server.com
+Protected Resource: https://your-server.com/.well-known/oauth-protected-resource
+Authorization Server: https://your-server.com/.well-known/oauth-authorization-server
+Endpoints: /oauth/authorize, /oauth/token, /oauth/register
+```
 
-### 3️⃣ Configure ChatGPT (or other MCP client)
+### 3️⃣ Configure ChatGPT
 
-In your ChatGPT MCP settings:
-- **Server URL:** `http://localhost:8001`
-- **OAuth Token Endpoint:** `http://localhost:8001/oauth/token`
-- **OAuth Metadata:** `http://localhost:8001/.well-known/oauth-authorization-server`
-- **Client ID:** `chatgpt-mcp-client` (from your .env)
-- **Client Secret:** Your generated secret (from .env)
+In ChatGPT MCP settings:
+- **Server URL:** `https://your-server.com/sse`
 
-ChatGPT will automatically:
-1. Request access token using client credentials
-2. Use token to connect to SSE endpoint
-3. Refresh token when it expires (after 1 hour)
+That's it! ChatGPT will automatically:
+1. Discover OAuth endpoints via metadata
+2. Register as OAuth client (Dynamic Client Registration)
+3. Perform Authorization Code flow with PKCE
+4. Obtain access token
+5. Connect to SSE endpoint
 
-### 4️⃣ Test Connection
+### 4️⃣ Verify OAuth Endpoints
 
 ```bash
-# Get access token
-TOKEN_RESPONSE=$(curl -s -X POST http://localhost:8001/oauth/token \
-  -d "grant_type=client_credentials" \
-  -d "client_id=chatgpt-mcp-client" \
-  -d "client_secret=your_secret_here")
+# Protected Resource Metadata (RFC 9728)
+curl https://your-server.com/.well-known/oauth-protected-resource
 
-echo $TOKEN_RESPONSE
-# {"access_token":"...","token_type":"Bearer","expires_in":3600}
+# Authorization Server Metadata (RFC 8414)
+curl https://your-server.com/.well-known/oauth-authorization-server
 
-# Test SSE connection
-ACCESS_TOKEN=$(echo $TOKEN_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-curl -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:8001/sse
+# Check 401 response with WWW-Authenticate header
+curl -i https://your-server.com/sse
 ```
 
 ---
@@ -279,34 +283,36 @@ obsidian-agent/
 | `VAULT_PATH` | Path to Obsidian vault | `/vault` |
 | `MCP_TRANSPORT` | Transport mode (stdio/sse) | `stdio` |
 | `MCP_PORT` | Port for SSE mode | `8001` |
-| `MCP_OAUTH_ENABLED` | Enable OAuth 2.0 authentication | `false` |
-| `MCP_OAUTH_CLIENT_ID` | OAuth client ID (required if OAuth enabled) | - |
-| `MCP_OAUTH_CLIENT_SECRET` | OAuth client secret (required if OAuth enabled) | - |
-| `MCP_OAUTH_ISSUER` | OAuth issuer URL (your server address) | `http://localhost:8001` |
+| `MCP_OAUTH_ENABLED` | Enable OAuth 2.1 for ChatGPT | `false` |
+| `MCP_OAUTH_ISSUER` | OAuth issuer (your public HTTPS URL) | `http://localhost:8001` |
 
-### OAuth 2.0 Details
+### OAuth 2.1 for ChatGPT MCP
 
-**Authentication Flow:**
-1. Client sends `client_id` and `client_secret` to `/oauth/token`
-2. Server returns `access_token` (valid for 1 hour)
-3. Client uses token in `Authorization: Bearer <token>` header
-4. Server validates token before allowing SSE connection
+**OAuth Flow (Automatic):**
+1. **Discovery** - ChatGPT fetches metadata from `/.well-known/oauth-protected-resource`
+2. **Registration** - Dynamically registers via `/oauth/register` (RFC 7591)
+3. **Authorization** - Authorization Code flow with PKCE (S256)
+4. **Token** - Exchanges code for access token at `/oauth/token`
+5. **Connect** - Uses token to connect to `/sse`
 
 **OAuth Endpoints:**
-- Token endpoint: `POST /oauth/token`
-- Metadata: `GET /.well-known/oauth-authorization-server`
-- Protected: `GET /sse` (requires valid access token)
+- `/.well-known/oauth-protected-resource` - Protected Resource Metadata (RFC 9728)
+- `/.well-known/oauth-authorization-server` - Authorization Server Metadata (RFC 8414)
+- `/oauth/register` - Dynamic Client Registration (RFC 7591)
+- `/oauth/authorize` - Authorization endpoint (OAuth 2.1)
+- `/oauth/token` - Token endpoint with PKCE verification
 
-**Generate secure client secret:**
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-```
+**Security:**
+- Authorization Code Flow with PKCE (S256) - industry standard
+- Dynamic Client Registration - no pre-shared credentials
+- Tokens expire after 1 hour
+- WWW-Authenticate headers in 401 responses (RFC 6750)
 
-**Security notes:**
-- Tokens expire after 3600 seconds (1 hour)
-- Expired tokens are automatically cleaned from memory
-- For production, use HTTPS and keep secrets secure
-- Without OAuth enabled, SSE server runs without authentication (not recommended)
+**Production Requirements:**
+- ✅ HTTPS mandatory (Let's Encrypt, Cloudflare)
+- ✅ Public domain with valid SSL
+- ✅ `MCP_OAUTH_ISSUER` = your HTTPS URL
+- ✅ Port 443 open in firewall
 
 ---
 
@@ -357,21 +363,71 @@ Check that Docker has access to the vault directory. On Windows/Mac, ensure the 
 <details>
 <summary><b>401 Unauthorized error in SSE mode</b></summary>
 
-Make sure OAuth is enabled and you're using a valid access token:
+This means OAuth is working correctly! ChatGPT needs to complete OAuth flow first.
 
+**For ChatGPT:**
+- Just enter your server URL: `https://your-server.com/sse`
+- ChatGPT will automatically handle OAuth
+
+**For manual testing:**
 ```bash
-# Check OAuth configuration
+# 1. Check OAuth metadata is accessible
+curl https://your-server.com/.well-known/oauth-protected-resource
+curl https://your-server.com/.well-known/oauth-authorization-server
+
+# 2. Verify 401 includes WWW-Authenticate header
+curl -i https://your-server.com/sse
+
+# Should see:
+# HTTP/1.1 401 Unauthorized
+# WWW-Authenticate: Bearer realm="...", resource_metadata="...", scope="mcp"
+```
+</details>
+
+<details>
+<summary><b>"MCP server does not implement OAuth"</b></summary>
+
+ChatGPT can't find OAuth metadata endpoints.
+
+**Solutions:**
+```bash
+# 1. Verify OAuth is enabled
 docker compose exec mcp printenv | grep MCP_OAUTH
 
-# Get access token
-curl -X POST http://localhost:8001/oauth/token \
-  -d "grant_type=client_credentials" \
-  -d "client_id=your_client_id" \
-  -d "client_secret=your_secret"
+# Should show:
+# MCP_OAUTH_ENABLED=true
+# MCP_OAUTH_ISSUER=https://your-server.com
 
-# Test with token
-curl -H "Authorization: Bearer <access_token>" http://localhost:8001/sse
+# 2. Test metadata endpoint
+curl https://your-server.com/.well-known/oauth-protected-resource
+
+# If 404, check:
+- Server restarted after config changes
+- HTTPS working correctly
+- No proxy/CDN blocking .well-known paths
 ```
+</details>
+
+<details>
+<summary><b>HTTPS/SSL certificate issues</b></summary>
+
+OAuth 2.1 requires HTTPS in production.
+
+**Solutions:**
+1. **Let's Encrypt** (free):
+```bash
+# Using Certbot
+sudo certbot --nginx -d your-server.com
+```
+
+2. **Cloudflare** (free):
+- Add domain to Cloudflare
+- Set SSL/TLS mode to "Full (strict)"
+- Point A record to your server IP
+
+3. **Testing locally**:
+- For development only: `MCP_OAUTH_ISSUER=http://localhost:8001`
+- ChatGPT won't accept HTTP in production!
 </details>
 
 <details>
