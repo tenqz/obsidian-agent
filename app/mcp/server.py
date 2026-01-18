@@ -110,7 +110,7 @@ if __name__ == "__main__":
         if use_oauth:
             # ChatGPT MCP OAuth 2.1 with PKCE
             issuer = os.getenv("MCP_OAUTH_ISSUER", f"http://localhost:{port}")
-            
+
             print("OAuth 2.1 (Authorization Code + PKCE) for ChatGPT MCP", file=sys.stderr, flush=True)
 
             # Create OAuth store with allow_any_client for ChatGPT compatibility
@@ -150,7 +150,7 @@ if __name__ == "__main__":
             print(f"OAuth issuer: {issuer}", file=sys.stderr, flush=True)
             print(f"Protected Resource: {metadata_uri}", file=sys.stderr, flush=True)
             print(f"Authorization Server: {issuer}/.well-known/oauth-authorization-server", file=sys.stderr, flush=True)
-            print(f"Endpoints: /oauth/authorize, /oauth/token, /oauth/register", file=sys.stderr, flush=True)
+            print("Endpoints: /oauth/authorize, /oauth/token, /oauth/register", file=sys.stderr, flush=True)
         else:
             # No authentication mode
             app = mcp_app
