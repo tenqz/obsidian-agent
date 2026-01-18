@@ -17,8 +17,11 @@ from starlette.routing import Mount
 
 from app.mcp.oauth import (
     OAuthMiddleware,
-    TokenStore,
-    create_oauth_metadata_endpoint,
+    OAuthStore,
+    create_authorization_endpoint,
+    create_authorization_server_metadata_endpoint,
+    create_dynamic_client_registration_endpoint,
+    create_protected_resource_metadata_endpoint,
     create_token_endpoint,
 )
 from app.vault.service import VaultService
@@ -105,42 +108,49 @@ if __name__ == "__main__":
         mcp_app = mcp.sse_app()
 
         if use_oauth:
-            # OAuth 2.0 mode
-            client_id = os.getenv("MCP_OAUTH_CLIENT_ID")
-            client_secret = os.getenv("MCP_OAUTH_CLIENT_SECRET")
+            # ChatGPT MCP OAuth 2.1 with PKCE
             issuer = os.getenv("MCP_OAUTH_ISSUER", f"http://localhost:{port}")
+            
+            print("OAuth 2.1 (Authorization Code + PKCE) for ChatGPT MCP", file=sys.stderr, flush=True)
 
-            if not client_id or not client_secret:
-                print(
-                    "ERROR: MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET must be set when OAuth is enabled",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                sys.exit(1)
+            # Create OAuth store
+            oauth_store = OAuthStore()
 
-            # Create token store and OAuth endpoints
-            token_store = TokenStore()
+            # Resource URI for protected resource metadata
+            resource_uri = issuer
+            metadata_uri = f"{issuer}/.well-known/oauth-protected-resource"
 
             # Create main app with OAuth endpoints
             app = Starlette(
                 routes=[
-                    create_oauth_metadata_endpoint(issuer),
-                    create_token_endpoint(token_store, client_id, client_secret),
+                    # Protected Resource Metadata (RFC 9728)
+                    create_protected_resource_metadata_endpoint(resource_uri, issuer),
+                    # Authorization Server Metadata (RFC 8414)
+                    create_authorization_server_metadata_endpoint(issuer),
+                    # Dynamic Client Registration (RFC 7591)
+                    create_dynamic_client_registration_endpoint(oauth_store),
+                    # Authorization endpoint (OAuth 2.1)
+                    create_authorization_endpoint(oauth_store),
+                    # Token endpoint
+                    create_token_endpoint(oauth_store),
+                    # MCP SSE endpoint
                     Mount("/", app=mcp_app),
                 ],
                 middleware=[
                     Middleware(
                         OAuthMiddleware,
-                        token_store=token_store,
+                        oauth_store=oauth_store,
                         protected_paths=["/sse", "/messages"],
+                        resource_uri=resource_uri,
+                        metadata_uri=metadata_uri,
                     )
                 ],
             )
 
-            print("OAuth 2.0 authentication enabled for SSE server", file=sys.stderr, flush=True)
             print(f"OAuth issuer: {issuer}", file=sys.stderr, flush=True)
-            print(f"Token endpoint: {issuer}/oauth/token", file=sys.stderr, flush=True)
-            print(f"Metadata endpoint: {issuer}/.well-known/oauth-authorization-server", file=sys.stderr, flush=True)
+            print(f"Protected Resource: {metadata_uri}", file=sys.stderr, flush=True)
+            print(f"Authorization Server: {issuer}/.well-known/oauth-authorization-server", file=sys.stderr, flush=True)
+            print(f"Endpoints: /oauth/authorize, /oauth/token, /oauth/register", file=sys.stderr, flush=True)
         else:
             # No authentication mode
             app = mcp_app
