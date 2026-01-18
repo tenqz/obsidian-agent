@@ -16,11 +16,11 @@ import secrets
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp
 
@@ -87,7 +87,7 @@ class OAuthStore:
         client = self._clients.get(client_id)
         if client:
             return client
-        
+
         # If allow_any_client is True, create a virtual client for unregistered clients
         if self.allow_any_client:
             # Create a virtual client that accepts standard ChatGPT redirect URIs
@@ -172,9 +172,6 @@ class OAuthStore:
 def verify_pkce(code_verifier: str, code_challenge: str, method: str) -> bool:
     """Verify PKCE code_verifier against code_challenge."""
     if method == "S256":
-        computed = (
-            hashlib.sha256(code_verifier.encode()).digest().hex()
-        )
         # Base64url without padding
         import base64
         computed_b64 = base64.urlsafe_b64encode(
@@ -337,7 +334,6 @@ def create_authorization_endpoint(oauth_store: OAuthStore) -> Route:
         # Validate required parameters
         client_id = params.get("client_id")
         redirect_uri = params.get("redirect_uri")
-        response_type = params.get("response_type")
         code_challenge = params.get("code_challenge")
         code_challenge_method = params.get("code_challenge_method")
         scope = params.get("scope", "mcp")
@@ -414,7 +410,7 @@ def create_token_endpoint(oauth_store: OAuthStore) -> Route:
             return JSONResponse(
                 {"error": "invalid_client"}, status_code=401
             )
-        
+
         # For virtual clients (allow_any_client=True), skip secret verification
         # For registered clients, verify secret
         if client.client_secret and client.client_secret != client_secret:
