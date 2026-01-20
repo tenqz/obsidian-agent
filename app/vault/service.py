@@ -152,6 +152,90 @@ class VaultService:
         """
         return {"type": type_, "name": entry.name, "path": entry.relative_to(base).as_posix()}
 
+    def glob(self, pattern: str) -> dict[str, list[str]]:
+        """Find files and directories matching a glob pattern.
+
+        Rules:
+        - `pattern` must be a relative glob pattern inside the vault.
+        - Hidden entries (any path component starting with ".") are excluded.
+        - Files are limited to `.md`. Directories are included as-is.
+        - Results are returned as relative paths from vault root.
+
+        Examples:
+        - "Ежедневные/2025/**/*.md" - all markdown files in 2025 subdirectories
+        - "Дистилляция/Daily/2025-*.md" - markdown files matching date pattern
+        - "**/*.md" - all markdown files recursively
+
+        Returns:
+            Dictionary with "files" and "dirs" lists of relative paths.
+        """
+        if not pattern or not pattern.strip():
+            raise ValueError("pattern must be non-empty")
+
+        # Check that pattern itself doesn't escape vault
+        pattern_parts = Path(pattern).parts
+        if any(self._is_hidden(part) for part in pattern_parts):
+            raise ValueError("hidden paths are not allowed in pattern")
+
+        # Check that pattern doesn't start with absolute path or parent directory
+        if Path(pattern).is_absolute() or pattern.startswith(".."):
+            raise ValueError("pattern must be relative and not escape vault")
+
+        base = Path(self.vault_path).resolve()
+
+        # Perform glob search from vault root
+        files: list[str] = []
+        dirs: list[str] = []
+
+        # For recursive patterns (**), split into base path and suffix pattern
+        if "**" in pattern:
+            # Split pattern at first **
+            parts = pattern.split("**", 1)
+            base_pattern = parts[0].rstrip("/")
+            suffix_pattern = parts[1].lstrip("/") if len(parts) > 1 else ""
+
+            if base_pattern:
+                # Resolve base path and ensure it's inside vault
+                base_path, _ = self._resolve_inside_vault(base_pattern)
+                # Use rglob with suffix pattern
+                if suffix_pattern:
+                    matches = base_path.rglob(suffix_pattern)
+                else:
+                    # Pattern ends with **, match everything recursively
+                    matches = base_path.rglob("*")
+            else:
+                # Pattern starts with **, search from vault root
+                matches = base.rglob(suffix_pattern if suffix_pattern else "*")
+        else:
+            # Non-recursive pattern, use regular glob
+            matches = base.glob(pattern)
+
+        for match in matches:
+            # Ensure result is inside vault (safety check)
+            try:
+                relative_path = match.relative_to(base)
+            except ValueError:
+                # Skip if outside vault (shouldn't happen with proper pattern, but safety check)
+                continue
+
+            # Skip hidden entries
+            if any(self._is_hidden(part) for part in relative_path.parts):
+                continue
+
+            # Convert to POSIX-style relative path
+            posix_path = relative_path.as_posix()
+
+            if match.is_file() and self._is_markdown(match):
+                files.append(posix_path)
+            elif match.is_dir():
+                dirs.append(posix_path)
+
+        # Sort for stable output
+        return {
+            "files": sorted(files),
+            "dirs": sorted(dirs),
+        }
+
     def _list_dir(self, *, base: Path, target: Path) -> list[dict[str, str]]:
         """List non-hidden subdirectories and markdown files in `target`.
 
