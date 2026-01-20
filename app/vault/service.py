@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from itertools import chain
 from pathlib import Path
 from typing import Any
@@ -110,8 +111,8 @@ class VaultService:
         # Проверка на выход за пределы vault
         try:
             target.relative_to(base)
-        except ValueError:
-            raise ValueError("path escapes vault root")
+        except ValueError as e:
+            raise ValueError("path escapes vault root") from e
 
         return base, target
 
@@ -190,6 +191,7 @@ class VaultService:
         # Perform glob search from vault root
         files: list[str] = []
         dirs: list[str] = []
+        matches: Iterable[Path]
 
         # For recursive patterns (**), split into base path and suffix pattern
         if "**" in pattern:
