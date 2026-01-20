@@ -279,3 +279,110 @@ def test_glob_pattern_ending_with_double_star(service: VaultService) -> None:
     assert "Projects/project2.md" in result["files"]
     assert "Projects/SubProject/sub.md" in result["files"]
     assert "Projects/SubProject" in result["dirs"]
+
+
+# ========== Tests for tree() method ==========
+
+
+def test_tree_root_structure(service: VaultService) -> None:
+    """Test that tree returns correct root structure."""
+    tree = service.tree()
+    assert tree["name"] == "root"
+    assert tree["path"] == ""
+    assert tree["type"] == "dir"
+    assert "children" in tree
+
+
+def test_tree_contains_directories(service: VaultService) -> None:
+    """Test that tree includes directories."""
+    tree = service.tree()
+    children = tree["children"]
+    dir_names = [child["name"] for child in children if child["type"] == "dir"]
+    assert "Daily" in dir_names
+    assert "Projects" in dir_names
+
+
+def test_tree_contains_files(service: VaultService) -> None:
+    """Test that tree includes markdown files."""
+    tree = service.tree()
+    children = tree["children"]
+    file_names = [child["name"] for child in children if child["type"] == "file"]
+    assert "note.md" in file_names
+
+
+def test_tree_nested_structure(service: VaultService) -> None:
+    """Test that tree has correct nested structure."""
+    tree = service.tree()
+    projects_dir = next(child for child in tree["children"] if child["name"] == "Projects")
+    assert projects_dir["type"] == "dir"
+    assert "children" in projects_dir
+    project_files = [child["name"] for child in projects_dir["children"] if child["type"] == "file"]
+    assert "project1.md" in project_files
+    assert "project2.md" in project_files
+
+
+def test_tree_deeply_nested(service: VaultService) -> None:
+    """Test that tree handles deeply nested directories."""
+    tree = service.tree()
+    projects_dir = next(child for child in tree["children"] if child["name"] == "Projects")
+    subproject_dir = next(
+        child for child in projects_dir["children"] if child["name"] == "SubProject"
+    )
+    assert subproject_dir["type"] == "dir"
+    assert "children" in subproject_dir
+    assert any(child["name"] == "sub.md" for child in subproject_dir["children"])
+
+
+def test_tree_excludes_hidden(service: VaultService) -> None:
+    """Test that tree excludes hidden files and directories."""
+    tree = service.tree()
+    children = tree["children"]
+    hidden_names = [child["name"] for child in children if child["name"].startswith(".")]
+    assert len(hidden_names) == 0
+
+
+def test_tree_excludes_non_markdown(service: VaultService) -> None:
+    """Test that tree excludes non-markdown files."""
+    tree = service.tree()
+
+    def find_file(node: dict, filename: str) -> bool:
+        if node["type"] == "file" and node["name"] == filename:
+            return True
+        if "children" in node:
+            return any(find_file(child, filename) for child in node["children"])
+        return False
+
+    assert not find_file(tree, "not-markdown.txt")
+
+
+def test_tree_paths_are_relative(service: VaultService) -> None:
+    """Test that all paths in tree are relative to vault root."""
+    tree = service.tree()
+
+    def check_paths(node: dict) -> None:
+        if node["path"]:
+            assert not Path(node["path"]).is_absolute()
+        if "children" in node:
+            for child in node["children"]:
+                check_paths(child)
+
+    check_paths(tree)
+
+
+def test_tree_sorted_output(service: VaultService) -> None:
+    """Test that tree children are sorted."""
+    tree = service.tree()
+    children = tree["children"]
+    names = [child["name"] for child in children]
+    assert names == sorted(names, key=str.lower)
+
+
+def test_tree_cyrillic_paths(service: VaultService) -> None:
+    """Test that tree handles Cyrillic paths correctly."""
+    tree = service.tree()
+    children = tree["children"]
+    cyrillic_dirs = [child for child in children if child["name"] in ["Ежедневные", "Дистилляция"]]
+    assert len(cyrillic_dirs) >= 1
+    for dir_node in cyrillic_dirs:
+        assert dir_node["type"] == "dir"
+        assert "children" in dir_node
