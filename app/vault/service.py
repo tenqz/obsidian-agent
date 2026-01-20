@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
@@ -173,14 +174,16 @@ class VaultService:
         if not pattern or not pattern.strip():
             raise ValueError("pattern must be non-empty")
 
-        # Check that pattern itself doesn't escape vault
-        pattern_parts = Path(pattern).parts
+        pattern_path = Path(pattern)
+
+        # Check that pattern doesn't escape the vault.
+        if pattern_path.is_absolute() or ".." in pattern_path.parts:
+            raise ValueError("pattern must be relative and not escape vault")
+
+        # Check that pattern doesn't contain hidden path components.
+        pattern_parts = (p for p in pattern_path.parts if p not in (".", ".."))
         if any(self._is_hidden(part) for part in pattern_parts):
             raise ValueError("hidden paths are not allowed in pattern")
-
-        # Check that pattern doesn't start with absolute path or parent directory
-        if Path(pattern).is_absolute() or pattern.startswith(".."):
-            raise ValueError("pattern must be relative and not escape vault")
 
         base = Path(self.vault_path).resolve()
 
@@ -197,13 +200,14 @@ class VaultService:
 
             if base_pattern:
                 # Resolve base path and ensure it's inside vault
-                base_path, _ = self._resolve_inside_vault(base_pattern)
+                _, base_dir = self._resolve_inside_vault(base_pattern)
+
                 # Use rglob with suffix pattern
                 if suffix_pattern:
-                    matches = base_path.rglob(suffix_pattern)
+                    matches = base_dir.rglob(suffix_pattern)
                 else:
                     # Pattern ends with **, match everything recursively
-                    matches = base_path.rglob("*")
+                    matches = chain([base_dir], base_dir.rglob("*"))
             else:
                 # Pattern starts with **, search from vault root
                 matches = base.rglob(suffix_pattern if suffix_pattern else "*")
