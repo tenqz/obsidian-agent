@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 
 class VaultService:
@@ -258,4 +259,70 @@ class VaultService:
                 items.append(self._to_item(base, entry, "file"))
 
         return items
+
+    def tree(self) -> dict[str, Any]:
+        """Get the complete directory tree of the vault.
+
+        Rules:
+        - Returns nested structure starting from vault root.
+        - Hidden entries (starting with ".") are excluded.
+        - Files are limited to `.md`. Directories are included as-is.
+        - Results are sorted by name (case-insensitive).
+
+        Returns:
+            Nested dictionary structure with "name", "path", "type", and "children" keys.
+            Root node has name "root", path "", and type "dir".
+        """
+        base = Path(self.vault_path).resolve()
+        return self._build_tree(base, base, "")
+
+    def _build_tree(self, base: Path, current: Path, relative_path: str) -> dict[str, Any]:
+        """Recursively build tree structure for a directory.
+
+        Args:
+            base: Absolute path to vault root.
+            current: Current directory being processed.
+            relative_path: Relative path from vault root to current directory.
+
+        Returns:
+            Dictionary with tree structure for current directory.
+        """
+        children: list[dict[str, Any]] = []
+
+        # Get all entries in current directory
+        entries = sorted(current.iterdir(), key=lambda p: p.name.lower())
+
+        for entry in entries:
+            # Skip hidden entries
+            if self._is_hidden(entry.name):
+                continue
+
+            # Calculate relative path for this entry
+            entry_relative = entry.relative_to(base).as_posix()
+
+            if entry.is_dir():
+                # Recursively build tree for subdirectory
+                child_tree = self._build_tree(base, entry, entry_relative)
+                children.append(child_tree)
+            elif entry.is_file() and self._is_markdown(entry):
+                # Add markdown file
+                children.append(
+                    {
+                        "name": entry.name,
+                        "path": entry_relative,
+                        "type": "file",
+                    }
+                )
+
+        # Build current node
+        node: dict[str, Any] = {
+            "name": current.name if relative_path else "root",
+            "path": relative_path,
+            "type": "dir",
+        }
+
+        if children:
+            node["children"] = children
+
+        return node
 
