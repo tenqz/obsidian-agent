@@ -89,6 +89,29 @@ def vault_write(path: str, content: str) -> dict[str, bool]:
         raise ValueError(_safe_error_message(e)) from None
 
 
+@mcp.tool()
+def vault_glob(pattern: str) -> dict[str, list[str]]:
+    """Find markdown files and directories matching a glob pattern.
+
+    This tool allows LLM to work with sets of files efficiently, enabling
+    comparison, aggregation, and coverage analysis without multiple ls calls.
+
+    Args:
+        pattern: Glob pattern relative to vault root. Supports:
+            - "Ежедневные/2025/**/*.md" - recursive search
+            - "Дистилляция/Daily/2025-*.md" - date pattern matching
+            - "**/*.md" - all markdown files recursively
+
+    Returns:
+        Dictionary with "files" and "dirs" lists of relative paths.
+    """
+    svc = _get_vault_service()
+    try:
+        return svc.glob(pattern=pattern)
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(_safe_error_message(e)) from None
+
+
 if __name__ == "__main__":
     import sys
 
