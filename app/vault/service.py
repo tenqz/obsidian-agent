@@ -326,3 +326,67 @@ class VaultService:
 
         return node
 
+    def search(self, query: str, case_sensitive: bool = False) -> dict[str, Any]:
+        """Search for text in all markdown files within the vault.
+
+        Rules:
+        - Searches recursively through all `.md` files.
+        - Hidden files and directories are excluded.
+        - Returns matches with file path, line number, and line content.
+        - Results are sorted by file path and line number.
+
+        Args:
+            query: Text to search for.
+            case_sensitive: If True, search is case-sensitive (default: False).
+
+        Returns:
+            Dictionary with "matches" list and "total_files" count.
+            Each match contains "path", "line" (1-based), and "content".
+        """
+        if not query or not query.strip():
+            raise ValueError("query must be non-empty")
+
+        base = Path(self.vault_path).resolve()
+        matches: list[dict[str, Any]] = []
+        processed_files = 0
+
+        # Recursively find all markdown files
+        for file_path in base.rglob("*.md"):
+            # Skip hidden files
+            relative_path = file_path.relative_to(base)
+            if any(self._is_hidden(part) for part in relative_path.parts):
+                continue
+
+            try:
+                # Read file content
+                content = file_path.read_text(encoding="utf-8")
+                lines = content.splitlines()
+                processed_files += 1
+
+                # Search in each line
+                for line_num, line in enumerate(lines, start=1):
+                    if case_sensitive:
+                        found = query in line
+                    else:
+                        found = query.lower() in line.lower()
+
+                    if found:
+                        matches.append(
+                            {
+                                "path": relative_path.as_posix(),
+                                "line": line_num,
+                                "content": line.strip(),
+                            }
+                        )
+            except (UnicodeDecodeError, PermissionError):
+                # Skip files that can't be read
+                continue
+
+        # Sort by path and line number
+        matches.sort(key=lambda m: (m["path"], m["line"]))
+
+        return {
+            "matches": matches,
+            "total_files": processed_files,
+        }
+
