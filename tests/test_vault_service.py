@@ -482,7 +482,7 @@ def test_search_sorted_results(service: VaultService) -> None:
         # Check that matches from same file are sorted by line number
         from itertools import groupby
 
-        for path, group in groupby(matches, key=lambda m: m["path"]):
+        for _, group in groupby(matches, key=lambda m: m["path"]):
             lines = [m["line"] for m in group]
             assert lines == sorted(lines)
 
