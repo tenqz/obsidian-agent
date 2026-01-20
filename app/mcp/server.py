@@ -179,11 +179,16 @@ if __name__ == "__main__":
         if use_oauth:
             # ChatGPT MCP OAuth 2.1 with PKCE
             issuer = os.getenv("MCP_OAUTH_ISSUER", f"http://localhost:{port}")
+            static_client_id = os.getenv("MCP_OAUTH_CLIENT_ID")
+            static_client_secret = os.getenv("MCP_OAUTH_CLIENT_SECRET")
 
             print("OAuth 2.1 (Authorization Code + PKCE) for ChatGPT MCP", file=sys.stderr, flush=True)
 
-            # Create OAuth store with allow_any_client for ChatGPT compatibility
-            oauth_store = OAuthStore(allow_any_client=True)
+            oauth_store = OAuthStore(
+                allow_any_client=False,
+                static_client_id=static_client_id,
+                static_client_secret=static_client_secret,
+            )
 
             # Resource URI for protected resource metadata
             resource_uri = issuer
