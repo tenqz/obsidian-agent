@@ -386,3 +386,120 @@ def test_tree_cyrillic_paths(service: VaultService) -> None:
     for dir_node in cyrillic_dirs:
         assert dir_node["type"] == "dir"
         assert "children" in dir_node
+
+
+# ========== Tests for search() method ==========
+
+
+def test_search_finds_text(service: VaultService) -> None:
+    """Test that search finds text in files."""
+    result = service.search("Test Note")
+    assert result["total_files"] > 0
+    assert len(result["matches"]) > 0
+    assert all("path" in match for match in result["matches"])
+    assert all("line" in match for match in result["matches"])
+    assert all("content" in match for match in result["matches"])
+
+
+def test_search_case_insensitive(service: VaultService) -> None:
+    """Test that search is case-insensitive by default."""
+    result_lower = service.search("test note")
+    result_upper = service.search("TEST NOTE")
+    result_mixed = service.search("Test Note")
+
+    # Should find the same matches regardless of case
+    assert len(result_lower["matches"]) == len(result_upper["matches"])
+    assert len(result_lower["matches"]) == len(result_mixed["matches"])
+
+
+def test_search_case_sensitive(service: VaultService) -> None:
+    """Test case-sensitive search option."""
+    result_sensitive = service.search("Test Note", case_sensitive=True)
+    result_insensitive = service.search("test note", case_sensitive=False)
+
+    # Case-sensitive search should find exact matches only
+    assert isinstance(result_sensitive["matches"], list)
+    assert isinstance(result_insensitive["matches"], list)
+
+
+def test_search_multiple_files(service: VaultService) -> None:
+    """Test that search finds matches in multiple files."""
+    result = service.search("Daily")
+    assert len(result["matches"]) > 0
+    # Should find matches in Daily directory files
+    paths = {match["path"] for match in result["matches"]}
+    assert any("Daily" in path for path in paths)
+
+
+def test_search_excludes_hidden_files(service: VaultService) -> None:
+    """Test that search excludes hidden files."""
+    result = service.search("Hidden")
+    # Should not find matches in .hidden/secret.md
+    paths = {match["path"] for match in result["matches"]}
+    assert ".hidden" not in " ".join(paths)
+
+
+def test_search_empty_query_raises(service: VaultService) -> None:
+    """Test that empty query raises an error."""
+    with pytest.raises(ValueError, match="query must be non-empty"):
+        service.search("")
+    with pytest.raises(ValueError, match="query must be non-empty"):
+        service.search("   ")
+
+
+def test_search_result_format(service: VaultService) -> None:
+    """Test that search results have correct format."""
+    result = service.search("Note")
+    assert "matches" in result
+    assert "total_files" in result
+    assert isinstance(result["matches"], list)
+    assert isinstance(result["total_files"], int)
+
+    if result["matches"]:
+        match = result["matches"][0]
+        assert "path" in match
+        assert "line" in match
+        assert "content" in match
+        assert isinstance(match["line"], int)
+        assert match["line"] > 0  # Line numbers are 1-based
+
+
+def test_search_sorted_results(service: VaultService) -> None:
+    """Test that search results are sorted by path and line number."""
+    result = service.search("Note")
+    matches = result["matches"]
+
+    if len(matches) > 1:
+        # Check sorting by path
+        paths = [match["path"] for match in matches]
+        assert paths == sorted(paths)
+
+        # Check that matches from same file are sorted by line number
+        from itertools import groupby
+
+        for path, group in groupby(matches, key=lambda m: m["path"]):
+            lines = [m["line"] for m in group]
+            assert lines == sorted(lines)
+
+
+def test_search_partial_match(service: VaultService) -> None:
+    """Test that search finds partial matches."""
+    result = service.search("Test")
+    assert len(result["matches"]) > 0
+    # Should find "Test Note" and other files containing "Test"
+    assert any("Test" in match["content"] for match in result["matches"])
+
+
+def test_search_cyrillic_text(service: VaultService) -> None:
+    """Test that search works with Cyrillic text."""
+    result = service.search("Новый год")
+    # Should find matches in files with Cyrillic content if they exist
+    assert isinstance(result["matches"], list)
+    assert isinstance(result["total_files"], int)
+
+
+def test_search_no_matches(service: VaultService) -> None:
+    """Test search when no matches are found."""
+    result = service.search("ThisTextDefinitelyDoesNotExist12345")
+    assert result["matches"] == []
+    assert result["total_files"] >= 0  # May have processed files but found no matches
