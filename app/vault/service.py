@@ -85,21 +85,30 @@ class VaultService:
         target.write_text(content, encoding="utf-8")
 
     def _resolve_inside_vault(self, path: str) -> tuple[Path, Path]:
-        """Resolve a relative path safely within the vault root.
+        """Resolve a user-supplied relative path inside the vault.
 
-        Returns `(base, target)` where both are absolute `Path` objects and
-        `target` is guaranteed to be inside `base`.
+        This helper intentionally does NOT call `resolve()` on the target path.
+        Calling `resolve()` would dereference symlinks / normalize `..` which can
+        change the meaning of the path and potentially allow escaping the vault.
+
+        Returns:
+            (base, target) where:
+            - base is an absolute resolved vault root.
+            - target is the joined path (base / path), kept as-is.
 
         Raises:
-        - ValueError: if `path` is absolute or escapes the vault root.
+            ValueError: if `path` is absolute or would escape the vault root.
         """
         if Path(path).is_absolute():
             raise ValueError("path must be relative")
 
         base = Path(self.vault_path).resolve()
-        target = (base / path).resolve()
+        target = base / path
 
-        if target != base and base not in target.parents:
+        # Проверка на выход за пределы vault
+        try:
+            target.relative_to(base)
+        except ValueError:
             raise ValueError("path escapes vault root")
 
         return base, target
