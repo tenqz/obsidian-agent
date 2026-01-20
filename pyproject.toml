@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "obsidian-agent"
-version = "1.0.0"
+version = "1.1.0"
 description = "MCP server for Obsidian vault integration with any LLM"
 authors = ["Oleg Patsay <smmartbiz@gmail.com>"]
 license = "MIT"
