@@ -112,6 +112,27 @@ def vault_glob(pattern: str) -> dict[str, list[str]]:
         raise ValueError(_safe_error_message(e)) from None
 
 
+@mcp.tool()
+def vault_tree() -> dict[str, Any]:
+    """Get the complete directory tree structure of the vault.
+
+    This tool provides a hierarchical view of the entire vault structure,
+    making it easy for LLM to understand the organization and navigate
+    the knowledge base.
+
+    Returns:
+        Nested dictionary structure representing the vault tree.
+        Root node has name "root", path "", and type "dir".
+        Each directory node contains a "children" list with subdirectories
+        and markdown files.
+    """
+    svc = _get_vault_service()
+    try:
+        return svc.tree()
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(_safe_error_message(e)) from None
+
+
 if __name__ == "__main__":
     import sys
 
