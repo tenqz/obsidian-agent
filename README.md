@@ -20,7 +20,7 @@ Connect your Obsidian vault to any LLM via MCP - read, write, and manage notes w
 - 🤖 **AI-Powered** - Let AI help you organize and create notes
 - 🔌 **MCP Protocol** - Compatible with any MCP-supported LLM client
 - 🐳 **Docker Ready** - Simple setup with Docker
-- 🔒 **OAuth 2.0** - Secure authentication for network access
+- 🔒 **OAuth 2.1** - Secure authentication with PKCE for network access
 - ⚡ **Two Modes** - stdio for direct connection, SSE for network access
 
 ---
@@ -40,7 +40,7 @@ Connect your Obsidian vault to any LLM via MCP - read, write, and manage notes w
 
 **SSE mode** - Network access via Server-Sent Events
 - Best for: ChatGPT MCP, remote access, web applications
-- Security: OAuth 2.0 authentication required
+- Security: OAuth 2.1 (Authorization Code + PKCE) authentication required
 
 ---
 
@@ -175,21 +175,67 @@ curl -i https://your-server.com/sse
 
 Try these commands in your LLM client:
 
-- `"Show all notes in my vault"`
-- `"Read my daily note for today"`
-- `"Create a new note about project ideas"`
-- `"List all notes in the Projects folder"`
-- `"Update my daily template with a new section"`
+- `"Show all notes in my vault"` - Uses `vault_ls` or `vault_tree`
+- `"Read my daily note for today"` - Uses `vault_read`
+- `"Create a new note about project ideas"` - Uses `vault_write`
+- `"List all notes in the Projects folder"` - Uses `vault_ls`
+- `"Find all notes from 2025"` - Uses `vault_glob` with pattern `**/2025-*.md`
+- `"Show me the complete structure of my vault"` - Uses `vault_tree`
+- `"Search for mentions of 'machine learning' in my notes"` - Uses `vault_search`
+- `"Find all notes matching 'Daily/2025/**/*.md'"` - Uses `vault_glob`
 
 ---
 
 ## 🛠️ Available Tools
 
-| Tool | Description | Example |
-|------|-------------|---------|
-| `vault_ls` | List folders and markdown files | List all notes in a directory |
-| `vault_read` | Read note content | Read specific note |
-| `vault_write` | Create or update notes | Create new note or update existing |
+| Tool | Description | Use Case |
+|------|-------------|----------|
+| `vault_ls` | List folders and markdown files in a directory | Browse vault structure, navigate folders |
+| `vault_read` | Read markdown file content | Access note content for analysis |
+| `vault_write` | Create or update markdown files | Create new notes, update existing content |
+| `vault_glob` | Find files/directories matching glob pattern | Efficiently find files by pattern (e.g., `**/2025-*.md`) |
+| `vault_tree` | Get complete directory tree structure | Understand vault organization at a glance |
+| `vault_search` | Full-text search across all markdown files | Find notes by content, not just filenames |
+
+### Tool Details
+
+#### `vault_ls(path: str)`
+List contents of a directory.
+- **Example:** `vault_ls("Projects")` - List all items in Projects folder
+- **Returns:** List of entries with `type`, `name`, and `path`
+
+#### `vault_read(path: str)`
+Read content of a markdown file.
+- **Example:** `vault_read("Daily/2025-01-18.md")` - Read specific note
+- **Returns:** File content as string
+
+#### `vault_write(path: str, content: str)`
+Create or overwrite a markdown file.
+- **Example:** `vault_write("Ideas/new-idea.md", "# New Idea\n\nContent...")`
+- **Returns:** Success status
+
+#### `vault_glob(pattern: str)`
+Find files and directories matching a glob pattern.
+- **Examples:**
+  - `vault_glob("**/*.md")` - All markdown files recursively
+  - `vault_glob("Daily/2025-*.md")` - Files matching date pattern
+  - `vault_glob("Projects/**/*.md")` - All markdown files in Projects subtree
+- **Returns:** Dictionary with `files` and `dirs` lists
+- **Why it's powerful:** Eliminates 80% of `ls` calls, enables set operations and coverage analysis
+
+#### `vault_tree()`
+Get complete hierarchical structure of the vault.
+- **Example:** `vault_tree()` - Get full vault structure
+- **Returns:** Nested dictionary with `name`, `path`, `type`, and `children`
+- **Why it's useful:** LLM can understand vault organization without multiple `ls` calls
+
+#### `vault_search(query: str, case_sensitive: bool = False)`
+Search for text in all markdown files.
+- **Examples:**
+  - `vault_search("machine learning")` - Case-insensitive search
+  - `vault_search("Python", case_sensitive=True)` - Case-sensitive search
+- **Returns:** Dictionary with `matches` (list of `path`, `line`, `content`) and `total_files`
+- **Why it's essential:** Enables content-based discovery, not just filename matching
 
 ---
 
@@ -274,7 +320,7 @@ obsidian-agent/
 | Mode | Use Case | Authentication | Connection |
 |------|----------|---------------|------------|
 | **stdio** | Cursor, Claude Desktop | None (isolated) | Direct stdin/stdout |
-| **SSE** | ChatGPT, Remote access | OAuth 2.0 | HTTP/SSE stream |
+| **SSE** | ChatGPT, Remote access | OAuth 2.1 (PKCE) | HTTP/SSE stream |
 
 ### Environment Variables
 
@@ -288,12 +334,14 @@ obsidian-agent/
 
 ### OAuth 2.1 for ChatGPT MCP
 
-**OAuth Flow (Automatic):**
-1. **Discovery** - ChatGPT fetches metadata from `/.well-known/oauth-protected-resource`
-2. **Registration** - Dynamically registers via `/oauth/register` (RFC 7591)
-3. **Authorization** - Authorization Code flow with PKCE (S256)
-4. **Token** - Exchanges code for access token at `/oauth/token`
-5. **Connect** - Uses token to connect to `/sse`
+**OAuth 2.1** is the latest OAuth standard, combining best practices from OAuth 2.0 with mandatory security improvements. This implementation uses **Authorization Code Flow with PKCE** (Proof Key for Code Exchange), which is the recommended flow for public clients like ChatGPT.
+
+**OAuth Flow (Fully Automatic):**
+1. **Discovery** - ChatGPT automatically fetches metadata from `/.well-known/oauth-protected-resource`
+2. **Registration** - Dynamically registers as OAuth client via `/oauth/register` (RFC 7591)
+3. **Authorization** - Performs Authorization Code flow with PKCE (S256 challenge)
+4. **Token Exchange** - Exchanges authorization code for access token at `/oauth/token`
+5. **Connect** - Uses Bearer token to authenticate SSE connection at `/sse`
 
 **OAuth Endpoints:**
 - `/.well-known/oauth-protected-resource` - Protected Resource Metadata (RFC 9728)
@@ -302,11 +350,19 @@ obsidian-agent/
 - `/oauth/authorize` - Authorization endpoint (OAuth 2.1)
 - `/oauth/token` - Token endpoint with PKCE verification
 
-**Security:**
-- Authorization Code Flow with PKCE (S256) - industry standard
-- Dynamic Client Registration - no pre-shared credentials
-- Tokens expire after 1 hour
-- WWW-Authenticate headers in 401 responses (RFC 6750)
+**Security Features:**
+- ✅ **Authorization Code Flow** - Most secure OAuth flow for web applications
+- ✅ **PKCE (S256)** - Protection against authorization code interception attacks
+- ✅ **Dynamic Client Registration** - No pre-shared credentials needed
+- ✅ **Short-lived Tokens** - Access tokens expire after 1 hour (3600 seconds)
+- ✅ **WWW-Authenticate Headers** - Proper 401 responses per RFC 6750
+- ✅ **HTTPS Required** - Mandatory in production for secure token transmission
+
+**Why OAuth 2.1?**
+- OAuth 2.1 removes deprecated flows (implicit, password grant)
+- Makes PKCE mandatory for public clients
+- Simplifies security best practices
+- Better suited for modern applications like ChatGPT MCP
 
 **Production Requirements:**
 - ✅ HTTPS mandatory (Let's Encrypt, Cloudflare)
