@@ -15,7 +15,7 @@ services:
     volumes:
       - "${OBSIDIAN_VAULT_PATH:-./vault}:/vault"
     ports:
-      - "${MCP_PORT:-8001}:8001"
+      - "127.0.0.1:${MCP_PORT:-8001}:8001"
     command: ["python", "-m", "app.mcp.server"]
     restart: unless-stopped
     networks:
