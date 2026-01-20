@@ -133,6 +133,31 @@ def vault_tree() -> dict[str, Any]:
         raise ValueError(_safe_error_message(e)) from None
 
 
+@mcp.tool()
+def vault_search(query: str, case_sensitive: bool = False) -> dict[str, Any]:
+    """Search for text in all markdown files within the vault.
+
+    This tool enables full-text search across the entire vault, allowing LLM
+    to find relevant notes based on content, not just filenames.
+
+    Args:
+        query: Text to search for in file contents.
+        case_sensitive: If True, search is case-sensitive (default: False).
+
+    Returns:
+        Dictionary with "matches" list and "total_files" count.
+        Each match contains:
+        - "path": relative path to the file
+        - "line": line number (1-based) where match was found
+        - "content": the line content containing the match
+    """
+    svc = _get_vault_service()
+    try:
+        return svc.search(query=query, case_sensitive=case_sensitive)
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(_safe_error_message(e)) from None
+
+
 if __name__ == "__main__":
     import sys
 
