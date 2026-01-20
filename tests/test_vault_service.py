@@ -50,17 +50,22 @@ def service(vault_path: Path) -> VaultService:
 def test_ls_root(service: VaultService) -> None:
     """Test listing root directory."""
     items = service.ls("")
-    assert len(items) == 2
+    assert len(items) == 5
     assert {"type": "dir", "name": "Daily", "path": "Daily"} in items
     assert {"type": "file", "name": "note.md", "path": "note.md"} in items
+    assert {"type": "dir", "name": "Projects", "path": "Projects"} in items
+    assert {"type": "dir", "name": "Ежедневные", "path": "Ежедневные"} in items
+    assert {"type": "dir", "name": "Дистилляция", "path": "Дистилляция"} in items
 
 
 def test_ls_subdirectory(service: VaultService) -> None:
     """Test listing subdirectory."""
     items = service.ls("Daily")
-    assert len(items) == 1
-    assert items[0]["type"] == "file"
-    assert items[0]["name"] == "2026-01-17.md"
+    assert [i["path"] for i in items] == [
+        "Daily/2025-12-31.md",
+        "Daily/2026-01-17.md",
+        "Daily/2026-01-18.md",
+    ]
 
 
 def test_ls_hidden_excluded(service: VaultService) -> None:
