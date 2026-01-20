@@ -63,11 +63,19 @@ class AccessToken:
 class OAuthStore:
     """In-memory storage for OAuth data."""
 
-    def __init__(self, allow_any_client: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        allow_any_client: bool = False,
+        static_client_id: str | None = None,
+        static_client_secret: str | None = None,
+    ) -> None:
         self._clients: dict[str, DynamicClient] = {}
         self._codes: dict[str, AuthorizationCode] = {}
         self._tokens: dict[str, AccessToken] = {}
         self.allow_any_client = allow_any_client
+        self.static_client_id = static_client_id
+        self.static_client_secret = static_client_secret
 
     def register_client(self, redirect_uris: list[str]) -> DynamicClient:
         """Register new OAuth client (DCR)."""
@@ -84,6 +92,16 @@ class OAuthStore:
 
     def get_client(self, client_id: str) -> DynamicClient | None:
         """Get registered client or accept any if allow_any_client=True."""
+        if self.static_client_id and client_id == self.static_client_id:
+            if not self.static_client_secret:
+                return None
+            return DynamicClient(
+                client_id=client_id,
+                client_secret=self.static_client_secret,
+                redirect_uris=[],
+                created_at=time.time(),
+            )
+
         client = self._clients.get(client_id)
         if client:
             return client
@@ -288,6 +306,15 @@ def create_dynamic_client_registration_endpoint(oauth_store: OAuthStore) -> Rout
     """Create Dynamic Client Registration endpoint (RFC 7591)."""
 
     async def register_client(request: Request) -> JSONResponse:
+        if oauth_store.static_client_id:
+            return JSONResponse(
+                {
+                    "error": "access_denied",
+                    "error_description": "dynamic client registration is disabled",
+                },
+                status_code=403,
+            )
+
         try:
             body = await request.json()
         except Exception:
@@ -344,20 +371,21 @@ def create_authorization_endpoint(oauth_store: OAuthStore) -> Route:
         if not client_id:
             return JSONResponse(
                 {"error": "invalid_client", "error_description": "client_id is required"},
-                status_code=400
+                status_code=400,
+            )
+
+        if not redirect_uri:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "redirect_uri is required"},
+                status_code=400,
             )
 
         # Validate client
         client = oauth_store.get_client(client_id)
         if not client:
             return JSONResponse(
-                {"error": "invalid_client"}, status_code=400
-            )
-
-        # Validate redirect_uri
-        if redirect_uri not in client.redirect_uris:
-            return JSONResponse(
-                {"error": "invalid_redirect_uri"}, status_code=400
+                {"error": "invalid_client"},
+                status_code=400,
             )
 
         # Validate PKCE
@@ -395,7 +423,8 @@ def create_token_endpoint(oauth_store: OAuthStore) -> Route:
             form = await request.form()
         except Exception:
             return JSONResponse(
-                {"error": "invalid_request"}, status_code=400
+                {"error": "invalid_request"},
+                status_code=400,
             )
 
         grant_type = form.get("grant_type")
@@ -418,9 +447,8 @@ def create_token_endpoint(oauth_store: OAuthStore) -> Route:
                 {"error": "invalid_client"}, status_code=401
             )
 
-        # For virtual clients (allow_any_client=True), skip secret verification
-        # For registered clients, verify secret
-        if client.client_secret and client.client_secret != client_secret:
+        # Verify secret for static + registered clients.
+        if not client.client_secret or client.client_secret != client_secret:
             return JSONResponse(
                 {"error": "invalid_client"}, status_code=401
             )
